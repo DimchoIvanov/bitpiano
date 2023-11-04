@@ -161,34 +161,18 @@ main (int argc, char *argv[])
             {
                 phase = (6.28 * (double)i) / ((double)format_data.numSmpl);
                 double val_d = sin(phase);
-                val_d = round((val_d * 0xFFFF));;
-                int16_t val_i = (int16_t) val_d;
-//                memcpy((p), &val_i, fmt_size(format));
-                copy_i = val_i;
-                q = (p);
-                *q = copy_i >> 8;
-                q++;
-                copy_i = val_i;
-                *q = copy_i & 0x0FF;
+                val_d = round((val_d * 0xFFFF));
+                double val_h = round((val_d / 2));
+                int16_t val_i = ((int16_t)(val_d/2)) & 0xFFFF;
 
-                p += fmt_size(format);
-                //memcpy(p, &val_i, fmt_size(format));
-                //p += fmt_size(format);
-
-                //memcpy(p, &val_i, fmt_size(format));
-                //p += fmt_size(format);
-//                 memcpy((p), &val_i, fmt_size(format));
-//                q = (p+1);
-//                copy_i = val_i;
-                q = (p);
-                *q = copy_i >> 8;
-                q++;
-                copy_i = val_i;
-                *q = copy_i & 0x0FF;
+                memcpy(p, &val_i, fmt_size(format));
                 p += fmt_size(format);
 
-                fprintf(stderr, "i[%d] ph[%01.3f] vd[%01.3f] vi[0x%04x] [%ld]\n",
-                        i, phase, val_d, val_i, (p - ((char*)&bbuf3[0])));
+                memcpy(p, &val_i, fmt_size(format));
+                p += fmt_size(format);
+
+                fprintf(stderr, "-i[%d] ph[%01.3f] vd[%01.1f] vh[%01.1f] vi[0x%02x] [%ld]\n",
+                        i, phase, val_d, val_h, val_i, (p - ((char*)&bbuf3[0])));
             }
             fprintf(stderr, "bytes_writen[%ld]\n", p - ((char*)&bbuf3[0]));
         }
@@ -345,7 +329,7 @@ main (int argc, char *argv[])
     ///////////
 
     if ((err = snd_pcm_hw_params_get_sbits(hw_params)) < 0) {
-        fprintf (stderr, "cannot get sbits [%d](%s)\n", err, snd_strerror (err));
+        fprintf (stderr, "cannot get hw_sbits [%d](%s)\n", err, snd_strerror (err));
     }
     else {
         fprintf (stderr, "Get sbits[%d]\n", err);
@@ -398,7 +382,7 @@ main (int argc, char *argv[])
         fprintf (stderr, "cannot set minimum available count [%d](%s)\n", err, snd_strerror (err));
         exit (1);
     }
-    if ((err = snd_pcm_sw_params_set_start_threshold (playback_handle, sw_params, 0U)) < 0) {
+    if ((err = snd_pcm_sw_params_set_start_threshold (playback_handle, sw_params, FRMLIMIT)) < 0) {
         fprintf (stderr, "cannot set start mode [%d](%s)\n", err, snd_strerror (err));
         exit (1);
     }
@@ -492,6 +476,7 @@ main (int argc, char *argv[])
         }
 
         //memcpy(bbuf,bbuf2,(frames_to_deliver * format_data.blockAlign));
+        uint16_t targetBlockAlign = format_data.NumOfChan * fmt_size(devfmt);
 
         switch (format_data.bitsPerSample)
         {
@@ -555,7 +540,7 @@ main (int argc, char *argv[])
         {
             if (fmt_size(devfmt)*8 == 16)
             {
-                memcpy(bbuf, bbuf2, sizeof(frames_to_deliver * format_data.blockAlign));
+                memcpy(bbuf, bbuf2, (frames_to_deliver * format_data.blockAlign));
             }
             else if (fmt_size(devfmt)*8 == 24) {
                 // 16-to-24
@@ -602,25 +587,11 @@ main (int argc, char *argv[])
 
         if (print_once)
         {
-//            fprintf (stderr, "[%08x][%04x]\n", f1.v1.l11, f1.v1.l12);
-//            fprintf (stderr, "[%08x][%04x]\n", f1.v1.r11, f1.v1.r12);
-//            fprintf (stderr, "[%08x][%04x]\n", f1.v1.l21, f1.v1.l22);
-//            fprintf (stderr, "[%08x][%04x]\n", f1.v1.r21, f1.v1.r22);
-
             fprintf (stderr, "BB:uf2\n");
-            // [00][00][00]:[00][06][05] |
-
-            //fprintf (stderr, "strbuf=<%s>", strbuf);
 
             int width = fmt_size(devfmt)*chan; // format_data.blockAlign;
             for (int i=0; i < 100; i+=width)
             {
-                //fprintf (stderr, "[%08x][%08x]\n", buf2[i], buf2[i+1]);
-//                fprintf (stderr, "[%02x][%02x][%02x]:[%02x][%02x][%02x] |\n ",
-//                        bbuf2[i], bbuf2[i+1], bbuf2[i+2], bbuf2[i+3], bbuf2[i+4], bbuf2[i+5]);
-//                fprintf (stderr, "[%02x][%02x][%02x][%02x]:[%02x][%02x][%02x][%02x]\n",
-//                                                        bbuf[i*2], bbuf[i*2+1], bbuf[i*2+2], bbuf[i*2+3],
-//                                                        bbuf[i*2+4], bbuf[i*2+5], bbuf[i*2+6], bbuf[i*2+7]);
                 char strbuf[128] = {0};
                 int left = 128;
                 char* pp = strbuf;
@@ -645,15 +616,6 @@ main (int argc, char *argv[])
                 fprintf (stderr, "%s\n", strbuf);
             }
             fprintf (stderr, "-----:\n");
-
-//            fprintf (stderr, "BBuf:\n");
-//            for (int i=0; i < 100; i+=2)
-//            {
-//                //fprintf (stderr, "[%08x][%08x]\n", buf[i], buf[i+1]);
-//                fprintf (stderr, "[%01x][%01x][%01x][%01x]\n",
-//                                        bbuf2[i], bbuf2[i+1], bbuf2[i+2], bbuf2[i+3]);
-//            }
-//            fprintf (stderr, "-----:\n");
 
             print_once = false;
         }
